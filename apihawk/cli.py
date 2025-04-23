@@ -1,4 +1,7 @@
 import argparse
+from .core.fuzzer import fuzz_endpoint
+from .core.crawler import crawl_api
+from .core.scanner import scan_api
 
 
 """
@@ -104,3 +107,63 @@ parser.add_argument(
 
 args = parser.parse_args()
 
+
+
+if args.command == "fuzz":
+    fuzz_endpoint(
+        url=args.url,
+        wordlist=args.wordlist,
+        method=args.method,
+        cookie=args.cookie,
+        header=args.header,
+        timeout=args.timeout,
+        proxies=args.proxies,
+        verbose=args.verbose
+    )
+if args.command == "scan":
+    scan_api(
+        url=args.url,
+        method=args.method,
+        cookie=args.cookie,
+        header=args.header,
+        type=args.type,
+        port=args.port,
+        wordlist=args.wordlist,
+        output=args.output,
+        verbose=args.verbose,
+        config=args.config,
+        timeout=args.timeout,
+        proxies=args.proxies
+    )
+
+if args.command == "crawl":
+    crawl_api(
+        url=args.url,
+        method=args.method,
+        cookie=args.cookie,
+        header=args.header,
+        type=args.type,
+        port=args.port,
+        wordlist=args.wordlist,
+        output=args.output,
+        verbose=args.verbose,
+        config=args.config,
+        timeout=args.timeout,
+        proxies=args.proxies,
+    )
+    
+if args.command == "auth":
+    auth_api(
+        url=args.url,
+        method=args.method,
+        cookie=args.cookie,
+        header=args.header,
+        type=args.type,
+        port=args.port,
+        wordlist=args.wordlist,
+        output=args.output,
+        verbose=args.verbose,
+        config=args.config,
+        timeout=args.timeout,
+        proxies=args.proxies,
+    )

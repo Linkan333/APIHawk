@@ -1,0 +1,1 @@
+from .core.fuzzer import fuzz_endpoint
