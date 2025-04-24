@@ -1,0 +1,11 @@
+users
+posts
+graphql
+health
+check
+api
+v1
+v2
+admin
+auth
+login

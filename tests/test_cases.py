@@ -5,6 +5,7 @@ import pytest_asyncio
 from unittest.mock import patch, Mock, mock_open
 from apihawk.core.fuzzer import fuzz_endpoint
 from apihawk.plugins.api_plugins import is_grpc_api, is_graphql_api, is_rest_api
+from apihawk.cli import main
 
 # Mock wordlist for fuzzer tests
 WORDLIST_CONTENT = "users\nposts\ngraphql\nhealth\ncheck"
@@ -147,3 +148,122 @@ async def test_invalid_fuzz(http_client):
     """Test fuzzer with URL lacking FUZZ."""
     result = await fuzz_endpoint("https://example.com/", "wordlist.txt", "GET", client=http_client)
     assert result is None
+    
+    
+# ----- CLI TESTS -----
+@pytest.fixture
+def mock_client():
+    client = Mock()
+    
+    async def mock_request(*args, **kwargs):
+        return Mock(
+            status_code=200,
+            headers={"Content-Type": "application/json"},
+            json=lambda: {"data": {"test": "success"}},
+            content=b"test content",
+            http_version="HTTP/2"
+        )
+    
+    async def mock_get(*args, **kwargs):
+        return await mock_request(*args, **kwargs)
+        
+    async def mock_post(*args, **kwargs):
+        return await mock_request(*args, **kwargs)
+        
+    client.request = mock_request
+    client.get = mock_get
+    client.post = mock_post
+    return client
+
+@pytest.fixture
+def mock_fuzz_endpoint():
+    async def mock_fuzz(*args, **kwargs):
+        return [
+            {"url": "http://example.com/api/v1", "status": 200, "type": "endpoint"},
+            {"url": "http://example.com/api/v2", "status": 404, "type": "endpoint"}
+        ]
+    return mock_fuzz
+
+@pytest.mark.asyncio
+async def test_fuzz_command(mock_client, mock_fuzz_endpoint, capsys):
+    # Arrange
+    test_args = [
+        "fuzz",
+        "--url", "http://example.com/api/FUZZ",
+        "--method", "GET",
+        "--wordlist", "tests/fixtures/sample_wordlist.txt",
+        "--verbose"
+    ]
+    
+    with patch("sys.argv", ["apihawk"] + test_args), \
+         patch("apihawk.core.fuzzer.fuzz_endpoint", mock_fuzz_endpoint), \
+         patch("httpx.AsyncClient") as mock_async_client:
+        
+        mock_async_client.return_value.__aenter__.return_value = mock_client
+        
+        # Act
+        await main()
+        
+        # Assert
+        captured = capsys.readouterr()
+        assert "Found: " in captured.out
+        assert "http://example.com/api/v1" in captured.out
+        assert "http://example.com/api/v2" in captured.out
+
+@pytest.mark.asyncio
+async def test_fuzz_command_no_results(mock_client, capsys):
+    # Arrange
+    async def mock_empty_fuzz(*args, **kwargs):
+        return []
+
+    test_args = [
+        "fuzz",
+        "--url", "http://example.com",
+        "--method", "GET",
+        "--wordlist", "tests/fixtures/sample_wordlist.txt"
+    ]
+    
+    with patch("sys.argv", ["apihawk"] + test_args), \
+         patch("apihawk.core.fuzzer.fuzz_endpoint", mock_empty_fuzz), \
+         patch("httpx.AsyncClient") as mock_async_client:
+        
+        mock_async_client.return_value.__aenter__.return_value = mock_client
+        
+        # Act
+        await main()
+        
+        # Assert
+        captured = capsys.readouterr()
+        assert captured.out.strip() == ""
+
+@pytest.mark.asyncio
+async def test_fuzz_command_with_invalid_url():
+    # Arrange
+    test_args = [
+        "fuzz",
+        "--url", "invalid-url",
+        "--method", "GET",
+        "--wordlist", "tests/fixtures/sample_wordlist.txt"
+    ]
+    
+    with patch("sys.argv", ["apihawk"] + test_args), \
+         patch("httpx.AsyncClient") as mock_async_client:
+        
+        mock_async_client.return_value.__aenter__.side_effect = httpx.RequestError("Invalid URL")
+        
+        # Act & Assert
+        with pytest.raises(httpx.RequestError):
+            await main()
+            
+#############
+#           #
+# SCAN TEST #
+#           #
+#############
+
+
+#############
+#           #
+# CRAWL TEST#
+#           #
+#############
