@@ -1,33 +1,149 @@
-import requests
+# tests/test_cases.py
 import pytest
-import unittest
+import httpx
+import pytest_asyncio
 from unittest.mock import patch, Mock, mock_open
 from apihawk.core.fuzzer import fuzz_endpoint
+from apihawk.plugins.api_plugins import is_grpc_api, is_graphql_api, is_rest_api
 
+# Mock wordlist for fuzzer tests
+WORDLIST_CONTENT = "users\nposts\ngraphql\nhealth\ncheck"
 
-class TestFuzzer(unittest.TestCase):
-    #Simulate a invalid wordlist file
-    def test_invalid_wordlist(self):
-        result = fuzz_endpoint("http://example.com/FUZZ", "nonexistent.txt", "GET")
-        self.assertIsNone(result)
-    
-    #Simulate a invalud URL
-    def test_invalid_url(self):
-        result = fuzz_endpoint("http://invalid-url..com/FUZZ", "wordlist.txt", "POST")
-        self.assertIsNone(result)
-    
-    #Simulate a invlid method
-    def test_invalid_method(self):
-        result = fuzz_endpoint("http://example.com/FUZZ", "wordlist.txt", "INVALID")
-        self.assertIsNone(result)
-        
-    #Simulate an invalid FUZZ (no fuzz inside of it)
-    def test_invalid_fuzz(self):
-        result = fuzz_endpoint("http://example.com/", "wordlist.txt", "GET")
-        self.assertIsNone(result)
-    
-    #Simulate a valid fuzz
-    @patch("builtins.open", mock_open(read_data=r"test\n\endpoint\napi"))
-    def test_valid_fuzz(self):
-        result = fuzz_endpoint("http://example.com/FUZZ", "wordlist.txt", "GET")
-        self.assertIsInstance(result, list)
+@pytest_asyncio.fixture
+async def http_client():
+    async with httpx.AsyncClient(http2=True, timeout=5) as client:
+        yield client
+
+@pytest.fixture
+def mock_open_wordlist():
+    with patch("builtins.open", mock_open(read_data=WORDLIST_CONTENT)) as m:
+        yield m
+
+# gRPC Tests
+@pytest.mark.asyncio
+async def test_grpc_api_google_cloud(http_client):
+    """Test detection of a gRPC API (Google Cloud Pub/Sub)."""
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.headers = {"Content-Type": "application/grpc"}
+    mock_response.http_version = "HTTP/2"
+
+    with patch.object(httpx.AsyncClient, "get", return_value=mock_response):
+        result = await is_grpc_api("https://pubsub.googleapis.com/google.pubsub.v1.Publisher/Publish", http_client)
+        assert result is True
+
+@pytest.mark.asyncio
+async def test_invalid_grpc_api(http_client):
+    """Test detection of a non-gRPC API."""
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.headers = {"Content-Type": "application/json"}
+    mock_response.http_version = "HTTP/1.1"
+
+    with patch.object(httpx.AsyncClient, "get", return_value=mock_response):
+        result = await is_grpc_api("https://example.com", http_client)
+        assert result is False
+
+# GraphQL Tests
+@pytest.mark.asyncio
+async def test_graphql_api_github(http_client):
+    """Test detection of GitHub's GraphQL API."""
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.headers = {"Content-Type": "application/json"}
+    mock_response.json.return_value = {"data": {"__schema": {"types": [{"name": "Query"}]}}}
+
+    with patch.object(httpx.AsyncClient, "post", return_value=mock_response):
+        result = await is_graphql_api("https://api.github.com/graphql", http_client)
+        assert result is True
+
+@pytest.mark.asyncio
+async def test_invalid_graphql_api(http_client):
+    """Test detection of a non-GraphQL API."""
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.headers = {"Content-Type": "application/json"}
+    mock_response.json.return_value = {"message": "Not a GraphQL API"}
+
+    with patch.object(httpx.AsyncClient, "post", return_value=mock_response):
+        result = await is_graphql_api("https://api.github.com", http_client)
+        assert result is False
+
+# REST Tests
+@pytest.mark.asyncio
+async def test_rest_api_jsonplaceholder(http_client):
+    """Test detection of JSONPlaceholder's REST API."""
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.headers = {"Content-Type": "application/json"}
+    mock_response.json.return_value = [{"id": 1, "name": "Leanne Graham"}]
+
+    with patch.object(httpx.AsyncClient, "get", return_value=mock_response):
+        result = await is_rest_api("https://jsonplaceholder.typicode.com/users", http_client)
+        assert result is True
+
+@pytest.mark.asyncio
+async def test_invalid_rest_api(http_client):
+    """Test detection of a non-REST API."""
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.headers = {"Content-Type": "text/html"}
+
+    with patch.object(httpx.AsyncClient, "get", return_value=mock_response):
+        result = await is_rest_api("https://example.com", http_client)
+        assert result is False
+
+# Fuzzer Tests
+@pytest.mark.asyncio
+async def test_fuzz_rest_jsonplaceholder(mock_open_wordlist, http_client):
+    """Test fuzzer on JSONPlaceholder REST API."""
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.headers = {"Content-Type": "application/json"}
+    mock_response.json.return_value = [{"id": 1, "name": "Leanne Graham"}]
+    mock_response.content = b"Mock content"
+
+    with patch.object(httpx.AsyncClient, "get", return_value=mock_response):
+        with patch.object(httpx.AsyncClient, "post", return_value=mock_response):  # For GraphQL detection
+            result = await fuzz_endpoint("https://jsonplaceholder.typicode.com/FUZZ", "wordlist.txt", "GET", client=http_client)
+            assert isinstance(result, list)
+            assert any(r["url"] == "https://jsonplaceholder.typicode.com/users" and r["type"] == "REST" for r in result)
+
+@pytest.mark.asyncio
+async def test_fuzz_graphql_github(mock_open_wordlist, http_client):
+    """Test fuzzer on GitHub GraphQL API."""
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.headers = {"Content-Type": "application/json"}
+    mock_response.json.return_value = {"data": {"__schema": {"types": [{"name": "Query"}]}}}
+    mock_response.content = b"Mock content"
+
+    with patch.object(httpx.AsyncClient, "post", return_value=mock_response):
+        with patch.object(httpx.AsyncClient, "get", return_value=mock_response):  # For REST detection
+            result = await fuzz_endpoint("https://api.github.com/FUZZ", "wordlist.txt", "POST", client=http_client)
+            assert isinstance(result, list)
+            assert any(r["url"] == "https://api.github.com/graphql" and r["type"] == "GraphQL" for r in result)
+
+@pytest.mark.asyncio
+async def test_invalid_wordlist(http_client):
+    """Test fuzzer with nonexistent wordlist."""
+    result = await fuzz_endpoint("https://example.com/FUZZ", "nonexistent.txt", "GET", client=http_client)
+    assert result is None
+
+@pytest.mark.asyncio
+async def test_invalid_url(http_client):
+    """Test fuzzer with invalid URL."""
+    result = await fuzz_endpoint("http://invalid-url..com/FUZZ", "wordlist.txt", "POST", client=http_client)
+    assert result is None
+
+@pytest.mark.asyncio
+async def test_invalid_method(http_client):
+    """Test fuzzer with invalid HTTP method."""
+    result = await fuzz_endpoint("https://example.com/FUZZ", "wordlist.txt", "INVALID", client=http_client)
+    assert result is None
+
+@pytest.mark.asyncio
+async def test_invalid_fuzz(http_client):
+    """Test fuzzer with URL lacking FUZZ."""
+    result = await fuzz_endpoint("https://example.com/", "wordlist.txt", "GET", client=http_client)
+    assert result is None
