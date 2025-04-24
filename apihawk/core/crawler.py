@@ -9,8 +9,8 @@ def crawl_api(url, method, params=None, headers=None, timeout=5, proxies=None, v
         loggin.info(f"Reached the URL: {url}")
         soup = BeautifulSoup(response.content, 'html.parser')
         link = []
-        for link in soup.find_all('a'):
-            href = link.get('href')
+        for link in soup.find_all('<a>'):
+            href = link.get('href="')
             if href:
                 urls.append(href)
             
@@ -18,7 +18,7 @@ def crawl_api(url, method, params=None, headers=None, timeout=5, proxies=None, v
                 if link.startswith('api'):
                     loggin.info(f"Found API endpoint: {link}")
                     urls.append(link)
-                elif link.contains('{'):
+                elif '{' in link:
                     loggin.info(f"Found possible API endpoint: {link}")
                     urls.append(link)
                 if 'api' in response.content:

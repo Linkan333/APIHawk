@@ -31,3 +31,16 @@ import logging
 
         self.request_count += 1
         return self.request_count"""
+
+
+class RateLimitHandler:
+    def __init__(self, rate_limit=10, per_seconds=1):
+        self.rate_limit = rate_limit
+        self.per_seconds = per_seconds
+        self.request_count = 0
+        self.last_reset_time = time.time()
+        
+        if rate_limit <= 0 or per_seconds <= 0:
+            raise ValueError("Rate limit and per_seconds must be positive integers.")
+        if rate_limit > 1000:
+            logging.warning("Rate limit is set to a very high value. This may lead to throttling by the server. And requests may be timed out.")
