@@ -2,6 +2,7 @@ import argparse
 import httpx
 import asyncio
 from apihawk.core.fuzzer import fuzz_endpoint
+from apihawk.core.scanner import scanner
 from apihawk.plugins.api_plugins import is_grpc_api, is_graphql_api, is_rest_api
 
 def create_parser():
@@ -76,6 +77,7 @@ def create_parser():
 async def main():
     parser = create_parser()
     args = parser.parse_args()
+    is_verbose = args.verbose if args.verbose else False
     
     if not args.command:
         parser.print_help()
@@ -99,8 +101,18 @@ async def main():
                     print(f"Found: {result}")
 
         elif args.command == "scan":
-            # Add scan implementation
-            pass
+            if args.command == "scan":
+                results = await scanner(
+                    url=args.url,
+                    wordlist=args.wordlist,
+                    method=args.method,
+                    cookie=args.cookie,
+                    header=args.header,
+                    timeout=args.timeout,
+                    proxies=args.proxies
+                    if is_verbose else None:
+                        verbose=args.verbose
+                )
 
         elif args.command == "crawl":
             # Add crawl implementation
