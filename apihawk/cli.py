@@ -101,17 +101,15 @@ async def main():
                     print(f"Found: {result}")
 
         elif args.command == "scan":
-            if args.command == "scan":
-                results = await scanner(
-                    url=args.url,
-                    wordlist=args.wordlist,
-                    method=args.method,
-                    cookie=args.cookie,
-                    header=args.header,
-                    timeout=args.timeout,
-                    proxies=args.proxies
-                    if is_verbose else None:
-                        verbose=args.verbose
+            results = await scanner(
+                url=args.url,
+                wordlist=args.wordlist,
+                cookie=args.cookie,
+                header=args.header,
+                method=args.method,
+                timeout=args.timeout,
+                proxies=args.proxies,
+                verbose=args.verbose
                 )
 
         elif args.command == "crawl":
