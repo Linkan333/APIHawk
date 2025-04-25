@@ -3,7 +3,7 @@ import logging
 import time
 from urllib.parse import urljoin, urlparse
 
-async def scanner(url, wordlist, method, cookie=None, header=None, timeout=5, proxies=None, verbose=False):
+async def scanner(url, wordlist, method, cookie=None, header=None, timeout=5, proxies=None, verbose=False, delay=0.1):
     """
     Scanner function to perform API reconassiance
 
