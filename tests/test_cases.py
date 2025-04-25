@@ -260,7 +260,59 @@ async def test_fuzz_command_with_invalid_url():
 # SCAN TEST #
 #           #
 #############
+@pytest.fixture
+def mock_scan_endpoint():
+    async def mock_scan(*args, **kwargs):
+        return [
+            {"url": "http://example.com/", "status": 200, "type": "endpoint"},
+            {"url": "http://example.com/", "status": 404, "type": "endpoint"}
+        ]
+    return mock_scan
 
+@pytest.mark.asyncio
+async def test_scan_command(mock_client, mock_scan_endpoint, capsys):
+    # Arrange
+    test_args = [
+        "scan",
+        "--url", "http://example.com/",
+        "--method", "GET",
+        "--wordlist", "tests/fixtures/sample_wordlist.txt",
+        "--verbose"
+    ]
+    
+    with patch("sys.argv", ["apihawk"] + test_args), \
+         patch("apihawk.core.scanner.scanner", mock_scan_endpoint), \
+         patch("httpx.AsyncClient") as mock_async_client:
+        
+        mock_async_client.return_value.__aenter__.return_value = mock_client
+        
+        # Act
+        await main()
+        
+        # Assert
+        captured = capsys.readouterr()
+        assert "Found: " in captured.out
+        assert "http://example.com/" in captured.out
+        assert "http://example.com/" in captured.out
+
+@pytest.mark.asyncio
+async def test_scan_command_with_invalid_url():
+    # Arrange
+    test_args = [
+        "scan",
+        "--url", "invalid-url",
+        "--method", "GET",
+        "--wordlist", "tests/fixtures/sample_wordlist.txt"
+    ]
+    
+    with patch("sys.argv", ["apihawk"] + test_args), \
+         patch("httpx.AsyncClient") as mock_async_client:
+        
+        mock_async_client.return_value.__aenter__.side_effect = httpx.RequestError("Invalid URL")
+        
+        # Act & Assert
+        with pytest.raises(httpx.RequestError):
+            await main()
 
 #############
 #           #
