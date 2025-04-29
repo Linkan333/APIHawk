@@ -4,6 +4,9 @@
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/Version-1.0.0-orange.svg)](https://github.com/yourusername/APIHawk)
 
+
+# Note (This project will be held on ice for the next weeks or so)
+
 APIHawk is a powerful and flexible API security testing tool designed to help security professionals and developers identify vulnerabilities in their APIs. With support for REST, GraphQL, and gRPC APIs, APIHawk provides comprehensive scanning, fuzzing, and crawling capabilities.
 
 ## 🚀 Features
